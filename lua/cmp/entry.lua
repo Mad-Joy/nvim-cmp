@@ -2,6 +2,7 @@ local cache = require('cmp.utils.cache')
 local char = require('cmp.utils.char')
 local misc = require('cmp.utils.misc')
 local str = require('cmp.utils.str')
+local snippet = require('cmp.utils.snippet')
 local config = require('cmp.config')
 local types = require('cmp.types')
 local matcher = require('cmp.matcher')
@@ -114,6 +115,9 @@ entry.get_word = function(self)
     local word
     if self:get_completion_item().textEdit and not misc.empty(self:get_completion_item().textEdit.newText) then
       word = str.trim(self:get_completion_item().textEdit.newText)
+      if self:get_completion_item().insertTextFormat == types.lsp.InsertTextFormat.Snippet then
+        word = tostring(snippet.parse(word))
+      end
       local overwrite = self:get_overwrite()
       if 0 < overwrite[2] or self:get_completion_item().insertTextFormat == types.lsp.InsertTextFormat.Snippet then
         word = str.get_word(word, string.byte(self.context.cursor_after_line, 1), overwrite[1] or 0)
@@ -121,7 +125,7 @@ entry.get_word = function(self)
     elseif not misc.empty(self:get_completion_item().insertText) then
       word = str.trim(self:get_completion_item().insertText)
       if self:get_completion_item().insertTextFormat == types.lsp.InsertTextFormat.Snippet then
-        word = str.get_word(word)
+        word = str.get_word(tostring(snippet.parse(word)))
       end
     else
       word = str.trim(self:get_completion_item().label)
@@ -360,12 +364,13 @@ end
 ---@param matching_config cmp.MatchingConfig
 ---@return { score: integer, matches: table[] }
 entry.match = function(self, input, matching_config)
-  return self.match_cache:ensure(input .. ':' .. (self.resolved_completion_item and '1' or '0' .. ':') .. (matching_config.disallow_fuzzy_matching and '1' or '0') .. ':' .. (matching_config.disallow_partial_fuzzy_matching and '1' or '0') .. ':' .. (matching_config.disallow_partial_matching and '1' or '0') .. ':' .. (matching_config.disallow_prefix_unmatching and '1' or '0'), function()
+  return self.match_cache:ensure(input .. ':' .. (self.resolved_completion_item and '1' or '0' .. ':') .. (matching_config.disallow_fuzzy_matching and '1' or '0') .. ':' .. (matching_config.disallow_partial_fuzzy_matching and '1' or '0') .. ':' .. (matching_config.disallow_partial_matching and '1' or '0') .. ':' .. (matching_config.disallow_prefix_unmatching and '1' or '0') .. ':' .. (matching_config.disallow_symbol_nonprefix_matching and '1' or '0'), function()
     local option = {
       disallow_fuzzy_matching = matching_config.disallow_fuzzy_matching,
       disallow_partial_fuzzy_matching = matching_config.disallow_partial_fuzzy_matching,
       disallow_partial_matching = matching_config.disallow_partial_matching,
       disallow_prefix_unmatching = matching_config.disallow_prefix_unmatching,
+      disallow_symbol_nonprefix_matching = matching_config.disallow_symbol_nonprefix_matching,
       synonyms = {
         self:get_word(),
         self:get_completion_item().label,
@@ -420,7 +425,7 @@ entry.get_completion_item = function(self)
     if self.resolved_completion_item then
       local completion_item = misc.copy(self.completion_item)
       for k, v in pairs(self.resolved_completion_item) do
-        completion_item[k] = v or completion_item[k]
+        completion_item[k] = completion_item[k] or v
       end
       return completion_item
     end
